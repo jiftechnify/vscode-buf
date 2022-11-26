@@ -106,23 +106,16 @@ export function activate(context: vscode.ExtensionContext) {
       console.log(warnings);
       return;
     }
-    const diagnostics = warnings.map(
-      (error: Warning): vscode.Diagnostic => {
-        // VSC lines and columns are 0 indexed, so we need to subtract
-        const range = new vscode.Range(
-          error.start_line - 1,
-          error.start_column - 1,
-          error.end_line - 1,
-          error.end_column - 1
-        );
-        return new vscode.Diagnostic(
-          range,
-          `${error.message} (${error.type})`,
-          vscode.DiagnosticSeverity.Warning
-        );
-      }
-    );
-    diagnosticCollection.set(document.uri, diagnostics);
+    const diagnosticsParPath = new Map<string, vscode.Diagnostic[]>();
+    for (const warning of warnings) {
+      const diags = diagnosticsParPath.get(warning.path) ?? [];
+      diagnosticsParPath.set(warning.path, [...diags, warningToDiagnostic(warning)]);
+    }
+
+    diagnosticCollection.clear();
+    diagnosticsParPath.forEach((diags, path) => {
+      diagnosticCollection.set(vscode.Uri.parse(path), diags);
+    });
   };
 
   context.subscriptions.push(vscode.languages.registerDocumentFormattingEditProvider('proto', new Formatter(binaryPath)));
@@ -137,6 +130,21 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
 }
+
+const warningToDiagnostic = (error: Warning): vscode.Diagnostic => {
+  // VSC lines and columns are 0 indexed, so we need to subtract
+  const range = new vscode.Range(
+    error.start_line - 1,
+    error.start_column - 1,
+    error.end_line - 1,
+    error.end_column - 1
+  );
+  return new vscode.Diagnostic(
+    range,
+    `${error.message} (${error.type})`,
+    vscode.DiagnosticSeverity.Warning
+  );
+};
 
 // Nothing to do for now
 export function deactivate() {}
